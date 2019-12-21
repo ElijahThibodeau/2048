@@ -1,0 +1,403 @@
+import random, sys, time, math, pygame
+
+pygame.init()
+from pygame.locals import *
+
+# Here I name all my constants and important ratios. They are all listed here for organization's sake.
+WINWIDTH = 792
+WINHEIGHT = WINWIDTH
+DISPLAYSURF = pygame.display.set_mode((WINWIDTH, WINHEIGHT))
+GAPSIZE = int(WINWIDTH / 33)  # 24px
+BOXSIZE = 7 * GAPSIZE  # 168px
+FPS = 60
+MAXDIST = 576
+BOXDIST = 192
+# Distance between left edge of one box to another = 192px
+# Distance between left edge of far left box to far right = 576
+# Long Time: 1/6 seconds or 10 frames - time it takes for a box to go the max distance using the move function(s)/time it takes to make a new box
+# Medium Time: 1/12 seconds or 5 frames -
+blankSurf = None
+FPSCLOCK = pygame.time.Clock()
+
+
+class boxObj:
+    def __init__(self, initVal):
+        self.val = initVal
+        self.numOnLine = 0
+        self.respectiveImage = None
+        self.updateRespectiveImage()
+
+    def updateRespectiveImage(self):
+        temp = pygame.transform.scale(pygame.image.load('bgimg%s.png' % self.val), (BOXSIZE, BOXSIZE)).convert()
+        temp.set_colorkey((0, 0, 0))
+        self.respectiveImage = temp
+
+    def setVal(self, newVal):
+        self.val = newVal
+        self.updateRespectiveImage()
+
+    def setNumOnLine(self, num):
+        self.numOnLine = num
+
+    def getVal(self):
+        return self.val
+
+    def getNumOnLine(self):
+        return self.numOnLine
+
+    def getRespectiveImage(self):
+        return self.respectiveImage
+
+blankBox = boxObj(0)
+
+boxObjs = []
+blankArr = []
+futureVals = []
+for i in range(0, 4):
+    temp = []
+    temp2 = []
+    temp3 = []
+    for j in range(0, 4):
+        temp.append(boxObj(0))
+        temp2.append(0)
+        temp3.append(0)
+    boxObjs.append(temp)
+    futureVals.append(temp2)
+    blankArr.append(temp3)
+
+#                   R       G       B
+BGCOLOR = (187, 173, 160)
+
+BGIMAGES = []
+
+
+# for i in range(0,3):
+#   try:
+#       tempimg = pygame.transform.scale(pygame.image.load('bgimg%s.png' %pow(2,i)), (140, 140)).convert()
+#       tempimg.set_colorkey((0, 0, 0))
+#       BGIMAGES.append(tempimg)
+#   except pygame.error:
+#       print("couldn't load bgimg%s.png" %pow(2,i))
+
+def main():
+    global FPSCLOCK, DISPLAYSURF
+    drawBoard()
+    addBox()
+    while True:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == KEYDOWN:
+                if event.key in (K_RIGHT, K_d):
+                    moveRight()
+                    addBox()
+                elif event.key in (K_LEFT, K_a):
+                    moveLeft()
+                    addBox()
+                if event.key in (K_UP, K_w):
+                    moveUp()
+                    addBox()
+                if event.key in (K_DOWN, K_s):
+                    moveDown()
+                    addBox()
+                if event.key == K_SPACE:
+                    printScreen()
+
+
+
+# draws board.
+def drawBoard():
+    global blankSurf
+    DISPLAYSURF.fill(BGCOLOR)
+    for rank in range(0, 4):
+        for file in range(0, 4):
+            DISPLAYSURF.blit(boxObjs[rank][file].getRespectiveImage(), leftTopCoordsOfBox(rank, file))
+    blankSurf = DISPLAYSURF.copy()
+
+
+# there are 5 gaps and 4 boxes in every board. We add 1 to the gapsize part because of the margins.
+def leftTopCoordsOfBox(l, t):
+    return (l * (BOXSIZE+GAPSIZE)) + GAPSIZE, t * BOXSIZE + (t+1) * GAPSIZE
+
+# We don't need to call drawBoard here because of the fact that no other boxes are moving besides the one we're animating.
+# In its place we can use DISPLAYSURF.copy(), which just copies the surface before we added any boxes.
+def addBox():
+    val = 2
+    rng1 = random.randint(0,3)
+    rng2 = random.randint(0,3)
+    while (boxObjs[rng1][rng2].getVal() != 0):
+        rng1 = random.randint(0,3)
+        rng2 = random.randint(0,3)
+    vert,horz = rng1,rng2
+    if random.randint(0,9) == 9: val = 4
+    boxObjs[vert][horz].setVal(val)
+    boxObj = boxObjs[vert][horz]
+    baseSurf = DISPLAYSURF.copy()
+    boxsize = int(BOXSIZE / 6)
+    boxinc = int(BOXSIZE / 12)
+    (left,top) = leftTopCoordsOfBox(horz, vert)
+    while boxsize < BOXSIZE:
+        delta = int((BOXSIZE - boxsize) / 2)
+        DISPLAYSURF.blit(baseSurf, (0, 0))
+        DISPLAYSURF.blit(pygame.transform.scale(boxObj.getRespectiveImage(), (boxsize, boxsize)),
+                         (left + delta, top + delta))
+        boxsize += boxinc
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+    DISPLAYSURF.blit(baseSurf, (0, 0))
+    DISPLAYSURF.blit(boxObj.getRespectiveImage(), (left, top))
+    pygame.display.update()
+
+def moveRight():
+    resetFutureVals()
+    maxFrameCount = 0
+    numOnLine = 0
+    prevVal = -2
+    for vert in range(0,len(boxObjs)):
+        numOnLine = 0
+        prevVal = -2
+        for invHorz in range(0,len(boxObjs)):
+            horz = 3 - invHorz
+            if(boxObjs[vert][horz].getVal() != 0):
+                if prevVal == boxObjs[vert][horz].getVal():
+                    futureVals[vert][horz] = 4 - numOnLine
+                    prevVal = -2
+                else:
+                    futureVals[vert][horz] = 3 - numOnLine
+                    numOnLine += 1
+                    prevVal = boxObjs[vert][horz].getVal()
+                maxFrameCount = max(maxFrameCount, getRequiredFrames(horz, futureVals[vert][horz]))
+    frameCount = 0
+    distPerFrame = 58
+    while frameCount <= maxFrameCount:
+        DISPLAYSURF.blit(blankSurf, (0,0))
+        for vert in range(0,4):
+            for horz in range(0,4):
+                if futureVals[vert][horz] != None:
+                    (left,top) = leftTopCoordsOfBox(horz,vert)
+                    (finalLeft,finalTop) = leftTopCoordsOfBox(futureVals[vert][horz],vert)
+                    tempLeft = min(left+(distPerFrame*frameCount), finalLeft)
+                    DISPLAYSURF.blit(boxObjs[vert][horz].getRespectiveImage(),(tempLeft,top))
+        pygame.display.update()
+        frameCount+=1
+        FPSCLOCK.tick(60)
+    verts = []
+    horzs = []
+    for vert in range(0,4):
+        for invhorz in range(0,4):
+            horz = 3 - invhorz
+            if(futureVals[vert][horz] != None):
+                if(boxObjs[vert][horz].getVal() != boxObjs[vert][futureVals[vert][horz]].getVal()):
+                    boxObjs[vert][futureVals[vert][horz]].setVal(boxObjs[vert][horz].getVal())
+                    boxObjs[vert][horz].setVal(0)
+                elif(futureVals[vert][horz] != horz):
+                    verts.append(vert)
+                    horzs.append(futureVals[vert][horz])
+    merge(verts,horzs)
+
+def moveLeft():
+    resetFutureVals()
+    maxFrameCount = 0
+    numOnLine = 0
+    prevVal = -240
+    verts = []
+    horzs = []
+    for vert in range(0,len(boxObjs)):
+        numOnLine = 0
+        prevVal = -2
+        for horz in range(0,len(boxObjs)):
+            if(boxObjs[vert][horz].getVal() != 0):
+                if prevVal == boxObjs[vert][horz].getVal():
+                    prevVal = -2
+                    futureVals[vert][horz] = numOnLine - 1
+                else:
+                    futureVals[vert][horz] = numOnLine
+                    numOnLine += 1
+                    prevVal = boxObjs[vert][horz].getVal()
+                maxFrameCount = max(maxFrameCount, getRequiredFrames(horz, futureVals[vert][horz]))
+
+    frameCount = 0
+    distPerFrame = 58
+    tempLeft = 0
+    while frameCount <= maxFrameCount:
+        DISPLAYSURF.blit(blankSurf, (0,0))
+        for vert in range(0,4):
+            for horz in range(0,4):
+                if (boxObjs[vert][horz].getVal() != 0):
+                    (left,top) = leftTopCoordsOfBox(horz,vert)
+                    (finalLeft,finalTop) = leftTopCoordsOfBox(futureVals[vert][horz],vert)
+                    tempLeft = max(left-(distPerFrame*frameCount), finalLeft)
+                    DISPLAYSURF.blit(boxObjs[vert][horz].getRespectiveImage(),(tempLeft,top))
+        pygame.display.update()
+        frameCount+=1
+        FPSCLOCK.tick(60)
+    for vert in range(0,4):
+        for horz in range(0,4):
+            if(futureVals[vert][horz] != None):
+                if(boxObjs[vert][horz].getVal() != boxObjs[vert][futureVals[vert][horz]].getVal()):
+                    boxObjs[vert][futureVals[vert][horz]].setVal(boxObjs[vert][horz].getVal())
+                    boxObjs[vert][horz].setVal(0)
+                elif futureVals[vert][horz] != horz:
+                    verts.append(vert)
+                    horzs.append(futureVals[vert][horz])
+    merge(verts,horzs)
+
+def moveUp():
+    resetFutureVals()
+    prevVal = -240
+    maxFrameCount = 0
+    for horz in range(0,len(boxObjs)):
+        numOnLine = 0
+        prevVal = -2
+        for vert in range(0,len(boxObjs)):
+            if(boxObjs[vert][horz].getVal() != 0):
+                if prevVal == boxObjs[vert][horz].getVal():
+                    prevVal = -2
+                    futureVals[vert][horz] = numOnLine-1
+                else:
+                    futureVals[vert][horz] = numOnLine
+                    numOnLine += 1
+                maxFrameCount = max(maxFrameCount, getRequiredFrames(vert, futureVals[vert][horz]))
+                prevVal = boxObjs[vert][horz].getVal()
+    frameCount = 0
+    distPerFrame = 58
+    tempTop = 0
+
+
+    while frameCount <= maxFrameCount:
+        DISPLAYSURF.blit(blankSurf, (0,0))
+        for vert in range(0,4):
+            for horz in range(0,4):
+                if (boxObjs[vert][horz].getVal() != 0):
+                    (left,top) = leftTopCoordsOfBox(horz,vert)
+                    (finalLeft,finalTop) = leftTopCoordsOfBox(horz,futureVals[vert][horz])
+                    tempTop = max(top-(distPerFrame*frameCount), finalTop)
+                    DISPLAYSURF.blit(boxObjs[vert][horz].getRespectiveImage(),(left,tempTop))
+        pygame.display.update()
+        frameCount+=1
+        FPSCLOCK.tick(60)
+    verts = []
+    horzs = []
+    for vert in range(0,4):
+        for horz in range(0,4):
+            if futureVals[vert][horz] != None:
+                if boxObjs[vert][horz].getVal() != boxObjs[futureVals[vert][horz]][horz].getVal():
+                    boxObjs[futureVals[vert][horz]][horz].setVal(boxObjs[vert][horz].getVal())
+                    boxObjs[vert][horz].setVal(0)
+                elif futureVals[vert][horz] != vert:
+                    verts.append(futureVals[vert][horz])
+                    horzs.append(horz)
+    merge(verts,horzs)
+
+
+
+
+def moveDown():
+    resetFutureVals()
+
+    maxFrameCount = 0
+    numOnLine = 0
+    prevVal = -29
+
+    for horz in range(0,len(boxObjs)):
+        numOnLine = 0
+        prevVal = -2
+        for invVert in range(0,len(boxObjs)):
+            vert = 3 - invVert
+            if(boxObjs[vert][horz].getVal() != 0):
+                if prevVal == boxObjs[vert][horz].getVal():
+                    futureVals[vert][horz] = 4 - numOnLine
+                    prevVal = -2
+                else:
+                    futureVals[vert][horz] = 3 - numOnLine
+                    numOnLine += 1
+                    prevVal = boxObjs[vert][horz].getVal()
+                maxFrameCount = max(maxFrameCount, getRequiredFrames(horz, futureVals[vert][horz]))
+
+
+    frameCount = 0
+    distPerFrame = 58
+
+
+    while frameCount <= maxFrameCount:
+        DISPLAYSURF.blit(blankSurf, (0,0))
+        for vert in range(0,4):
+            for horz in range(0,4):
+                if futureVals[vert][horz] != None:
+                    (left,top) = leftTopCoordsOfBox(horz,vert)
+                    (finalLeft,finalTop) = leftTopCoordsOfBox(horz,futureVals[vert][horz])
+                    tempTop = min(top+(distPerFrame*frameCount), finalTop)
+                    DISPLAYSURF.blit(boxObjs[vert][horz].getRespectiveImage(),(left,tempTop))
+        pygame.display.update()
+        frameCount+=1
+        FPSCLOCK.tick(60)
+    verts = []
+    horzs = []
+    for vert in range(0,3):
+        for horz in range(0,4):
+            if futureVals[vert][horz] != None:
+                if boxObjs[vert][horz].getVal() != boxObjs[futureVals[vert][horz]][horz].getVal():
+                    boxObjs[futureVals[vert][horz]][horz].setVal(boxObjs[vert][horz].getVal())
+                    boxObjs[vert][horz].setVal(0)
+                elif futureVals[vert][horz] != vert:
+                    verts.append(futureVals[vert][horz])
+                    horzs.append(horz)
+    merge(verts,horzs)
+
+def resetFutureVals():
+    global futureVals
+    for i in range(0,4):
+        for j in range(0,4):
+            futureVals[i][j] = None
+
+def getRequiredFrames(val,nxtval):
+    (x,filler) = leftTopCoordsOfBox(val, 0)
+    (y,fillertwo) = leftTopCoordsOfBox(nxtval,0)
+    distPerFrame = 58
+    return math.ceil(abs(x-y)/distPerFrame)
+
+def merge(verts, horzs):
+    global boxObjs
+    val = 0
+    for vert in verts:
+        for horz in horzs:
+            val = 2 * boxObjs[vert][horz].getVal()
+            boxObjs[vert][horz].setVal(val)
+            DISPLAYSURF.blit(blankBox.getRespectiveImage(), leftTopCoordsOfBox(horz, vert))
+    baseSurf = DISPLAYSURF.copy()
+    boxsize = int(BOXSIZE / 2)
+    boxinc = int(BOXSIZE / 10)
+    while boxsize < BOXSIZE:
+        delta = int((BOXSIZE - boxsize) / 2)
+        DISPLAYSURF.blit(baseSurf, (0, 0))
+        for vert in verts:
+            for horz in horzs:
+                (left, top) = leftTopCoordsOfBox(horz, vert)
+                DISPLAYSURF.blit(pygame.transform.scale(boxObjs[vert][horz].getRespectiveImage(), (boxsize, boxsize)),(left + delta, top + delta))
+        boxsize += boxinc
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+        pygame.display.update()
+
+
+def printScreen():
+    for i in range(0,4):
+        for j in range(0,4):
+            print(boxObjs[i][j].getVal(), "\t", end="")
+        print()
+    print()
+# i wanna do this enlarging animation from half to full in 15 frames and see how that comes out.
+# that would mean size goes from 65 to 140 with an enlargement rate of 5 pixels per frame.
+
+main()
+
+#            file1           file          file
+#rank1       [rank1,file1]   [rank1,file2]
+#rank2
+#rank3
+
+
+# left is determined by rank top is determined by file
+
+
